@@ -1,0 +1,190 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Simulador 3D: energía elástica</title>
+<style>
+:root{color-scheme:dark;--tx:#eef1f6;--mu:#9aa3b2;--ln:rgba(255,255,255,.14);--pn:rgba(12,14,20,.84);--ue:#4cc9ff;--k:#ffb02e;--ug:#b48cff;--q:#ff5a3c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:#000;color:var(--tx);font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;font-variant-numeric:tabular-nums}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+body.lock #c{touch-action:auto}
+#top{position:fixed;left:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 0;pointer-events:none}
+#top b{display:block;font-size:16px}#top span{color:var(--mu);font-size:12px}
+#eb{position:fixed;right:0;top:0;width:176px;margin:calc(env(safe-area-inset-top,0px) + 10px) 10px 0 0;padding:8px 10px;background:var(--pn);border:1px solid var(--ln);border-radius:10px;pointer-events:none;font-size:12px}
+#eb div{display:grid;grid-template-columns:34px 1fr 52px;gap:6px;align-items:center;margin:3px 0}
+#eb i{display:block;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+#eb i s{display:block;height:100%;width:0;border-radius:3px}
+#eb em{font-style:normal;text-align:right}
+#dock{position:fixed;left:0;right:0;bottom:0;padding:0 10px calc(env(safe-area-inset-bottom,0px) + 10px);display:flex;flex-direction:column;gap:8px;max-width:760px;margin:0 auto}
+.pn{background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:10px 12px}
+#cap b{display:block;font-size:15px}#cap div{color:#d4dae6;margin-top:3px;font-size:14px}
+.fr{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 3px;line-height:1.15}.fr i{font-style:normal;padding:0 3px}.fr i+i{border-top:1px solid currentColor}
+#sheet{display:none;max-height:42dvh;max-height:42vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#sheet.on{display:block}
+.tab{display:none}.tab.on{display:block}
+canvas#ch{width:100%;height:130px;display:block}
+.lg{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mu);margin-top:6px}.lg b{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 3px;text-align:right;border-bottom:1px solid var(--ln)}td:first-child,th:first-child{text-align:left}th{color:var(--mu);font-weight:500}
+.sl{margin:6px 0}.sl label{display:flex;justify-content:space-between}.sl input{width:100%;height:32px;margin:0}
+.row{display:flex;gap:8px;align-items:center}
+button,select{font:inherit;color:var(--tx);background:var(--pn);border:1px solid var(--ln);border-radius:10px;min-height:44px;padding:0 14px;cursor:pointer}
+button.ic{width:48px;padding:0;display:grid;place-items:center}button.ic svg{width:20px;height:20px;fill:currentColor}
+button.on{border-color:#4cc9ff;color:#4cc9ff}
+.chips{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}.chips button{white-space:nowrap;flex:none}
+#sc{flex:1;min-width:0;height:44px;margin:0}
+#err{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;background:#000}
+#shot{position:fixed;inset:0;background:rgba(0,0,0,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;text-align:center}
+#shot[hidden],#err[hidden]{display:none}#shot img{max-width:100%;max-height:78%;border-radius:8px}
+</style></head><body>
+<canvas id="c" aria-label="Simulación 3D del bloque, el resorte y la rampa"></canvas>
+<div id="err" hidden>Tu navegador no pudo iniciar WebGL. Prueba con otro navegador o activa la aceleración por hardware.</div>
+<div id="top"><b>Energía elástica y conservación</b><span>Resorte, tramo liso y rampa con fricción</span></div>
+<div id="eb"></div>
+<div id="dock">
+<div id="sheet" class="pn">
+ <div class="tab" id="t0"><canvas id="ch"></canvas><div class="lg"><span><b style="background:var(--ue)"></b>Elástica</span><span><b style="background:var(--k)"></b>Cinética</span><span><b style="background:var(--ug)"></b>Gravitatoria</span><span><b style="background:var(--q)"></b>Calor (fricción)</span></div></div>
+ <div class="tab" id="t1"></div>
+ <div class="tab" id="t2"></div>
+</div>
+<div id="cap" class="pn"><b></b><div></div></div>
+<div class="row"><button class="ic" id="bp" aria-label="Etapa anterior"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button><button class="ic" id="bg" aria-label="Reproducir o pausar"></button><button class="ic" id="bn" aria-label="Etapa siguiente"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5l11 7L4 19z"/></svg></button><input id="sc" type="range" min="0" max="1000" value="0" aria-label="Avance de la simulación"><select id="sp" aria-label="Velocidad"><option value=".25">0,25×</option><option value=".5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></div>
+<div class="row chips"><button data-t="0">Energía</button><button data-t="1">Resultados</button><button data-t="2">Datos</button><button id="bv" class="on">Vectores</button><button id="ba" class="on">Cámara auto</button><button id="bl">Bloquear cámara</button><button id="bs">Captura</button></div>
+</div>
+<div id="shot" hidden><img alt="Captura de la simulación"><p>Mantén presionada la imagen para guardarla. Toca para cerrar.</p></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+window.addEventListener('error',function(e){var r=document.getElementById('err');r.hidden=false;r.textContent='Error al iniciar: '+e.message+(e.lineno?' (línea '+e.lineno+')':'')});
+(function(){
+var $=function(s){return document.querySelector(s)},g=9.81,L=3,D=[3,2.2,3.4],Tt=D[0]+D[1]+D[2]+1.2;
+var DEF={m:1.5,k:600,x:.3,th:37,mu:.25},P=Object.assign({},DEF),M,RL=3.4;
+var f=function(v,d){return v.toFixed(d==null?2:d).replace('.',',')};
+var fr=function(n,d){return '<span class="fr"><i>'+n+'</i><i>'+d+'</i></span>'};
+function derive(){var th=P.th*Math.PI/180,w=Math.sqrt(P.k/P.m),vB=P.x*w,a=g*(Math.sin(th)+P.mu*Math.cos(th));M={th:th,w:w,E:.5*P.k*P.x*P.x,vB:vB,a:a,T1:Math.PI/2/w,T3:vB/a,s:vB*vB/(2*a)};RL=Math.max(3.4,M.s+.6)}
+derive();
+function st(T){var r={ph:0,u:0,bx:0,s:0,v:0,x:0},t;
+ if(T<D[0]){r.u=T/D[0];t=r.u*M.T1;r.x=P.x*Math.cos(M.w*t);r.bx=-r.x;r.v=P.x*M.w*Math.sin(M.w*t)}
+ else if(T<D[0]+D[1]){r.ph=1;r.u=(T-D[0])/D[1];r.bx=r.u*L;r.v=M.vB}
+ else{r.ph=2;r.u=Math.min(1,(T-D[0]-D[1])/D[2]);t=r.u*M.T3;r.bx=L;r.s=M.vB*t-.5*M.a*t*t;r.v=M.vB-M.a*t}
+ r.Ue=.5*P.k*r.x*r.x;r.K=.5*P.m*r.v*r.v;r.Ug=P.m*g*r.s*Math.sin(M.th);r.Q=P.mu*P.m*g*Math.cos(M.th)*r.s;return r}
+var cv=$('#c'),R;
+try{if(!window.THREE)throw 0;R=new THREE.WebGLRenderer({canvas:cv,antialias:true,powerPreference:'high-performance'})}catch(e){$('#err').hidden=false;return}
+R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.toneMapping=THREE.ACESFilmicToneMapping;R.toneMappingExposure=1.15;R.outputEncoding=THREE.sRGBEncoding;R.setClearColor(0,1);
+var sc=new THREE.Scene();sc.background=new THREE.Color(0x000000);sc.fog=new THREE.Fog(0x000000,14,30);
+var ec=document.createElement('canvas');ec.width=512;ec.height=256;var ex=ec.getContext('2d'),gr=ex.createLinearGradient(0,0,0,256);gr.addColorStop(0,'#2a3350');gr.addColorStop(.5,'#0a0c14');gr.addColorStop(1,'#000');ex.fillStyle=gr;ex.fillRect(0,0,512,256);ex.fillStyle='#fff';[[40,60],[190,50],[320,70],[430,55]].forEach(function(p){ex.fillRect(p[0],p[1],100,16)});
+var et=new THREE.CanvasTexture(ec);et.mapping=THREE.EquirectangularReflectionMapping;et.encoding=THREE.sRGBEncoding;
+var pm=new THREE.PMREMGenerator(R);sc.environment=pm.fromEquirectangular(et).texture;
+var kl=new THREE.DirectionalLight(0xffffff,1.6);kl.position.set(3,7,4);kl.castShadow=true;kl.shadow.mapSize.set(1024,1024);var sh=kl.shadow.camera;sh.left=-6;sh.right=8;sh.top=6;sh.bottom=-4;sh.near=1;sh.far=20;kl.shadow.bias=-.0005;sc.add(kl);
+var rl=new THREE.PointLight(0x4cc9ff,1.2,14);rl.position.set(-3,2.5,-3);sc.add(rl);sc.add(new THREE.HemisphereLight(0x8899cc,0x000000,.35));
+var fl=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshStandardMaterial({color:0x07080c,roughness:.85,metalness:.1}));fl.rotation.x=-Math.PI/2;fl.position.y=-.2;fl.receiveShadow=true;sc.add(fl);
+var gd=new THREE.GridHelper(40,80,0x1d2a40,0x121a2a);gd.position.y=-.198;sc.add(gd);
+var steel=new THREE.MeshStandardMaterial({color:0xc9ced8,metalness:.92,roughness:.26});
+var tr=new THREE.Mesh(new THREE.BoxGeometry(L+1.1,.2,.9),new THREE.MeshStandardMaterial({color:0x232833,metalness:.3,roughness:.5}));tr.position.set((L-1.1)/2,-.1,0);tr.receiveShadow=true;tr.castShadow=true;sc.add(tr);
+var wl=new THREE.Mesh(new THREE.BoxGeometry(.3,1.2,1.3),new THREE.MeshStandardMaterial({color:0x4a4f58,roughness:.95,metalness:0}));wl.position.set(-1.25,.4,0);wl.castShadow=true;wl.receiveShadow=true;sc.add(wl);
+var bs=new THREE.Shape();bs.moveTo(-.2,0);bs.lineTo(.2,0);bs.lineTo(.2,.4);bs.lineTo(-.2,.4);bs.lineTo(-.2,0);
+var bg=new THREE.ExtrudeGeometry(bs,{depth:.36,bevelEnabled:true,bevelThickness:.025,bevelSize:.025,bevelSegments:3});bg.translate(0,0,-.18);
+var blk=new THREE.Group(),bm=new THREE.Mesh(bg,steel);bm.castShadow=true;blk.add(bm);sc.add(blk);
+var ac=new THREE.Mesh(new THREE.BoxGeometry(.3,.06,.4),new THREE.MeshStandardMaterial({color:0xff7a1a,emissive:0xff4a00,emissiveIntensity:.5,roughness:.4}));ac.position.set(0,.43,0);blk.add(ac);
+var HL=.9;class Hx extends THREE.Curve{getPoint(t,o){var a=t*Math.PI*2*11;return(o||new THREE.Vector3()).set(t*HL,.13*Math.cos(a),.13*Math.sin(a))}}
+var sp=new THREE.Mesh(new THREE.TubeGeometry(new Hx(),360,.022,8),steel);sp.position.set(-1.1,.2,0);sp.castShadow=true;sc.add(sp);
+function lab(t,c){var k=document.createElement('canvas');k.width=256;k.height=64;var s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(k),transparent:true,depthTest:false}));s.scale.set(1.1,.275,1);s.renderOrder=9;s.k=k;s.c=c;lset(s,t);sc.add(s);return s}
+function lset(s,t){if(s.t===t)return;s.t=t;var x=s.k.getContext('2d');x.clearRect(0,0,256,64);x.font='600 28px system-ui,sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillStyle='rgba(0,0,0,.55)';x.fillRect(128-x.measureText(t).width/2-10,10,x.measureText(t).width+20,44);x.fillStyle=s.c;x.fillText(t,128,33);s.material.map.needsUpdate=true}
+var lA=lab('A',  '#4cc9ff'),lB=lab('B','#ffb02e'),lC=lab('C','#ff5a3c'),lM=lab('','#eef1f6'),lS=lab('','#ff5a3c');lA.position.set(0,.8,.5);lB.position.set(0,.8,.5);
+[[-.3,0x4cc9ff],[0,0xffb02e]].forEach(function(p,i){var m=new THREE.Mesh(new THREE.BoxGeometry(.02,.012,.9),new THREE.MeshBasicMaterial({color:p[1]}));m.position.set(p[0],.006,0);sc.add(m)});
+var ramp=new THREE.Group(),trc,ring;sc.add(ramp);
+trc=new THREE.Mesh(new THREE.BoxGeometry(1,.03,.5),new THREE.MeshBasicMaterial({color:0xff5a3c}));sc.add(trc);
+ring=new THREE.Mesh(new THREE.BoxGeometry(.03,.02,.92),new THREE.MeshBasicMaterial({color:0xffffff}));sc.add(ring);
+function build(){while(ramp.children.length){var o=ramp.children.pop();o.geometry.dispose()}
+ var c=Math.cos(M.th),s=Math.sin(M.th),h=new THREE.Shape();h.moveTo(L,0);h.lineTo(L+RL*c,RL*s);h.lineTo(L+RL*c,0);h.lineTo(L,0);
+ var gm=new THREE.ExtrudeGeometry(h,{depth:.9,bevelEnabled:false});gm.translate(0,0,-.45);var m=new THREE.Mesh(gm,new THREE.MeshStandardMaterial({color:0x2c3240,metalness:.35,roughness:.5}));m.castShadow=m.receiveShadow=true;ramp.add(m);
+ var pt=[];for(var i=0;i*.5<=RL;i++){var a=L+i*.5*c,b=i*.5*s;pt.push(a,b+.004,-.45,a,b+.004,.45)}
+ var lg=new THREE.BufferGeometry();lg.setAttribute('position',new THREE.Float32BufferAttribute(pt,3));ramp.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0x6b7a99})));
+ lC.position.set(L+M.s*c-.25*s,M.s*s+.5*c+.2,.5);lset(lS,'');trc.scale.x=.001;
+ lset(lM,'m = '+f(P.m)+' kg')}
+var UP=new THREE.Vector3(0,1,0);
+function arrow(col){var gp=new THREE.Group(),mt=new THREE.MeshBasicMaterial({color:col,depthTest:false}),a=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,1,8),mt),b=new THREE.Mesh(new THREE.ConeGeometry(.06,.16,12),mt);a.renderOrder=b.renderOrder=8;gp.add(a,b);gp.sh=a;gp.hd=b;sc.add(gp);return gp}
+function setA(a,o,d,F,on){var l=.25*Math.log(1+F/3);a.visible=on&&l>.06;if(!a.visible)return;a.position.copy(o);a.quaternion.setFromUnitVectors(UP,d);var s=Math.max(l-.16,.01);a.sh.scale.y=s;a.sh.position.y=s/2;a.hd.position.y=s+.08}
+var aF=arrow(0x4cc9ff),aW=arrow(0xb48cff),aN=arrow(0x6ee7a0),aK=arrow(0xff5a3c),lF=lab('Fe','#4cc9ff'),lW=lab('W','#b48cff'),lN=lab('N','#6ee7a0'),lK=lab('fk','#ff5a3c');
+var NP=70,pp=new Float32Array(NP*3).fill(-99),pv=new Float32Array(NP*3),pl=new Float32Array(NP),pi=0,pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.BufferAttribute(pp,3));
+var pts=new THREE.Points(pg,new THREE.PointsMaterial({color:0xff8a3c,size:.07,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));pts.frustumCulled=false;sc.add(pts);
+var cam=new THREE.PerspectiveCamera(40,1,.1,100),C={th:.8,ph:1.2,r:5,tx:-.3,ty:.3,tz:0},G=Object.assign({},C),auto=true,lock=false,vec=true;
+function setCam(){cam.position.set(C.tx+C.r*Math.sin(C.ph)*Math.sin(C.th),C.ty+C.r*Math.cos(C.ph),C.tz+C.r*Math.sin(C.ph)*Math.cos(C.th));cam.lookAt(C.tx,C.ty,C.tz)}
+function goal(r){var w=Math.min(1.6,Math.max(1,1.25/cam.aspect)),c=Math.cos(M.th),s=Math.sin(M.th);
+ if(r.ph==0){G.tx=-.3;G.ty=.3;G.r=4.4*w;G.th=.75;G.ph=1.25}
+ else if(r.ph==1){G.tx=r.bx;G.ty=.3;G.r=4.6*w;G.th=.9;G.ph=1.2}
+ else{var m=Math.max(M.s,1.5)*.5;G.tx=L+m*c;G.ty=m*s+.2;G.r=(4.4+M.s*.9)*w;G.th=.95;G.ph=1.25}}
+var ptr={},pd=0;cv.addEventListener('pointerdown',function(e){if(lock)return;cv.setPointerCapture(e.pointerId);ptr[e.pointerId]=[e.clientX,e.clientY];pd=0});
+cv.addEventListener('pointermove',function(e){var p=ptr[e.pointerId];if(!p||lock)return;var ks=Object.keys(ptr),dx=e.clientX-p[0],dy=e.clientY-p[1];
+ if(ks.length==2){var o=ptr[ks[0]==e.pointerId?ks[1]:ks[0]],d0=Math.hypot(p[0]-o[0],p[1]-o[1]),d1=Math.hypot(e.clientX-o[0],e.clientY-o[1]);G.r=C.r=Math.min(16,Math.max(1.8,C.r*d0/Math.max(d1,1)))}
+ else{G.th=C.th=C.th-dx*.006;G.ph=C.ph=Math.min(1.5,Math.max(.15,C.ph-dy*.006))}
+ setAuto(false);ptr[e.pointerId]=[e.clientX,e.clientY]});
+function up(e){delete ptr[e.pointerId]}cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+cv.addEventListener('wheel',function(e){if(lock)return;e.preventDefault();G.r=C.r=Math.min(16,Math.max(1.8,C.r*(1+e.deltaY*.001)));setAuto(false)},{passive:false});
+function setAuto(v){auto=v;$('#ba').classList.toggle('on',v)}
+var T=0,play=false,SP=1,lastPh=-1,E0=function(){return M.E};
+var ico={p:'<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>',s:'<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>'};
+function setPlay(v){play=v;if(v&&T>=Tt-.05)T=0;$('#bg').innerHTML=v?ico.s:ico.p}setPlay(false);
+$('#bg').onclick=function(){setPlay(!play)};
+var bnd=[0,D[0],D[0]+D[1],D[0]+D[1]+D[2]];
+$('#bn').onclick=function(){setPlay(false);for(var i=0;i<4;i++)if(bnd[i]>T+.05){T=bnd[i]+.001;return}T=Tt};
+$('#bp').onclick=function(){setPlay(false);for(var i=3;i>=0;i--)if(bnd[i]<T-.2){T=bnd[i];return}T=0};
+$('#sc').oninput=function(){setPlay(false);T=this.value/1000*Tt;setAuto(true)};
+$('#sp').onchange=function(){SP=+this.value};
+$('#bv').onclick=function(){vec=!vec;this.classList.toggle('on',vec)};
+$('#ba').onclick=function(){setAuto(!auto)};
+$('#bl').onclick=function(){lock=!lock;document.body.classList.toggle('lock',lock);this.classList.toggle('on',lock);this.textContent=lock?'Cámara bloqueada':'Bloquear cámara'};
+$('#bs').onclick=function(){R.render(sc,cam);var im=$('#shot img');im.src=cv.toDataURL('image/png');$('#shot').hidden=false};
+$('#shot').onclick=function(){this.hidden=true};
+var tabs=document.querySelectorAll('[data-t]'),cur=-1;
+tabs.forEach(function(b){b.onclick=function(){var n=+b.dataset.t;cur=cur==n?-1:n;tabs.forEach(function(x){x.classList.toggle('on',+x.dataset.t==cur)});$('#sheet').classList.toggle('on',cur>=0);for(var i=0;i<3;i++)$('#t'+i).classList.toggle('on',i==cur);fit()}});
+var bars=[['Ue','Ue','--ue'],['K','K','--k'],['Ug','Ug','--ug'],['Q','Q','--q']];
+$('#eb').innerHTML=bars.map(function(b,i){return '<div><span>'+b[0]+'</span><i><s id="b'+i+'" style="background:var('+b[2]+')"></s></i><em id="v'+i+'">0</em></div>'}).join('')+'<div style="grid-template-columns:1fr;color:#9aa3b2;margin-top:6px" id="bal"></div>';
+var defs=[['m','Masa m',.5,5,.05,'kg'],['k','Constante k',100,1000,10,'N·m⁻¹'],['x','Compresión x',.05,.5,.01,'m'],['th','Ángulo θ',10,60,1,'°'],['mu','Fricción μ',0,.6,.01,'']];
+$('#t2').innerHTML=defs.map(function(d){return '<div class="sl"><label><span>'+d[1]+'</span><b id="l'+d[0]+'"></b></label><input type="range" id="r'+d[0]+'" min="'+d[2]+'" max="'+d[3]+'" step="'+d[4]+'" value="'+P[d[0]]+'"></div>'}).join('')+'<button id="rs" style="width:100%;margin-top:6px">Restablecer datos del informe</button><p style="color:#9aa3b2;font-size:12px;margin:8px 0 0">La animación dilata el tiempo de cada etapa para que se pueda seguir; las fórmulas usan el tiempo real.</p>';
+function lbls(){defs.forEach(function(d){$('#l'+d[0]).textContent=f(P[d[0]],d[0]=='th'?0:d[0]=='k'?0:2)+' '+d[5]})}
+defs.forEach(function(d){$('#r'+d[0]).oninput=function(){P[d[0]]=+this.value;reset()}});
+$('#rs').onclick=function(){Object.assign(P,DEF);defs.forEach(function(d){$('#r'+d[0]).value=P[d[0]]});reset()};
+var S=null;
+function sample(){S=[];for(var i=0;i<=200;i++)S.push(st(i/200*(Tt-1.2)))}
+function res(){var a=st(0),b=st(D[0]+D[1]*.5),e=st(Tt),d=Object.keys(DEF).every(function(k){return P[k]==DEF[k]}),
+ rows=[['Ue,A (J)',27.0,a.Ue,1],['vB (m·s⁻¹)',6.0,b.v,2],['s (m)',2.29,e.s,2],['Ug,C (J)',null,e.Ug,1],['Calor Q (J)',null,e.Q,1]];
+ $('#t1').innerHTML='<table><tr><th></th><th>Informe</th><th>Simulación</th><th>Error</th></tr>'+rows.map(function(r){return '<tr><td>'+r[0]+'</td><td>'+(d&&r[1]!=null?f(r[1],r[3]):'—')+'</td><td>'+f(r[2],r[3])+'</td><td>'+(d&&r[1]!=null?f(Math.abs(r[2]-r[1])/r[1]*100)+' %':'—')+'</td></tr>'}).join('')+'</table><p style="color:#9aa3b2;font-size:12px;margin:8px 0 0">Balance: ΔEM = Wnc. Ue,A = Ug,C + Q → '+f(a.Ue,2)+' J = '+f(e.Ug+e.Q,2)+' J</p>'}
+function reset(){derive();build();sample();res();lbls();T=0;setPlay(false);lastPh=-1;setAuto(true)}
+function caps(ph){var c=['A → B · El resorte empuja el bloque','B · Tramo horizontal liso','B → C · La rampa con fricción frena el bloque'],
+ q=['Ue = '+fr('1','2')+'·k·x² = '+fr('1','2')+'·('+f(P.k,0)+')('+f(P.x)+')² = <b style="display:inline">'+f(M.E,1)+' J</b>',
+ 'K = Ue ⇒ vB = √('+fr('2·K','m')+') = <b style="display:inline">'+f(M.vB)+' m·s⁻¹</b> (sin fricción: la energía mecánica se conserva)',
+ 'K = m·g·s·(sen θ + μ·cos θ) ⇒ s = '+fr('K','m·g·(sen θ + μ·cos θ)')+' = <b style="display:inline">'+f(M.s)+' m</b>'];
+ $('#cap b').textContent=c[ph];$('#cap div').innerHTML=q[ph]}
+function fit(){var h=$('#dock').offsetHeight,w=innerWidth,H=innerHeight;cam.setViewOffset(w,H,0,Math.round(h*.45),w,H)}
+function size(){var w=innerWidth,H=innerHeight;R.setPixelRatio(Math.min(devicePixelRatio||1,2));R.setSize(w,H,false);cam.aspect=w/H;fit();cam.updateProjectionMatrix();lastPh=-1}
+addEventListener('resize',size);addEventListener('orientationchange',function(){setTimeout(size,250)});
+var ch=$('#ch'),cx=ch.getContext('2d');
+function chart(){var w=ch.clientWidth,h=ch.clientHeight,d=Math.min(devicePixelRatio||1,2);if(ch.width!=w*d){ch.width=w*d;ch.height=h*d}cx.setTransform(d,0,0,d,0,0);cx.clearRect(0,0,w,h);var cl=['#4cc9ff','#ffb02e','#b48cff','#ff5a3c'],kk=['Ue','K','Ug','Q'],tn=Math.min(T,Tt-1.2)/(Tt-1.2);
+ cx.strokeStyle='rgba(255,255,255,.1)';cx.strokeRect(.5,.5,w-1,h-1);
+ kk.forEach(function(k,j){cx.beginPath();cx.strokeStyle=cl[j];cx.lineWidth=2;S.forEach(function(p,i){var x=i/200*w,y=h-4-(p[k]/M.E)*(h-10);i?cx.lineTo(x,y):cx.moveTo(x,y)});cx.stroke()});
+ cx.strokeStyle='#fff';cx.lineWidth=1;cx.beginPath();cx.moveTo(tn*w,0);cx.lineTo(tn*w,h);cx.stroke();
+ cx.fillStyle='#9aa3b2';cx.font='11px system-ui';cx.fillText('Etapa 1',4,12);cx.fillText('Etapa 2',D[0]/(Tt-1.2)*w+4,12);cx.fillText('Etapa 3',(D[0]+D[1])/(Tt-1.2)*w+4,12)}
+var V=new THREE.Vector3(),V2=new THREE.Vector3(),clk=performance.now();
+function frame(now){requestAnimationFrame(frame);var dt=Math.min(.05,(now-clk)/1000);clk=now;
+ if(play){T+=dt*SP;if(T>=Tt){T=Tt;setPlay(false)}}
+ var r=st(T),c=Math.cos(M.th),s=Math.sin(M.th),on=r.ph==2,rot=on?M.th*Math.min(1,r.s/.35):0;
+ if(on){blk.position.set(L+r.s*c,r.s*s,0)}else blk.position.set(r.bx,0,0);blk.rotation.z=rot;
+ var bx=blk.position.x,by=blk.position.y;sp.scale.x=Math.max(.05,(r.ph==0?r.bx:Math.min(0,r.bx))+.9)/HL;if(r.ph>0)sp.scale.x=1;
+ lA.position.x=-P.x;lB.position.x=0;lM.position.set(bx-(on?.3*s:0),by+.95+(on?.2*c:0),0);
+ var st2=r.ph==2&&r.u>=1;lC.visible=true;lS.visible=st2;if(st2){lset(lS,'s = '+f(M.s)+' m');lS.position.set(L+M.s*c/2-.4*s,M.s*s/2+.4*c+.1,.5)}
+ trc.visible=ring.visible=on&&r.s>.01;if(trc.visible){trc.scale.x=Math.max(.001,r.s);trc.position.set(L+r.s*c/2,r.s*s/2+.02,0);trc.rotation.z=M.th;ring.position.set(L+M.s*c,M.s*s+.012,0);ring.rotation.z=M.th;ring.visible=st2}
+ var cc=V.set(bx-(on?.2*s:0),by+.2*(on?c:1),.35),nx=on?V2.set(-s,c,0):V2.set(0,1,0);
+ setA(aF,V.set(bx-.2,.2,.35),new THREE.Vector3(1,0,0),P.k*r.x,vec&&r.ph==0);lF.visible=aF.visible;if(lF.visible)lF.position.set(bx+.5*0-.2+.35,.62,.35);
+ setA(aW,cc.clone(),new THREE.Vector3(0,-1,0),P.m*g,vec);lW.visible=aW.visible;lW.position.set(cc.x,cc.y-.55,.35);
+ var Nn=P.m*g*(on?c:1);setA(aN,cc.clone(),nx.clone(),Nn,vec);lN.visible=aN.visible;lN.position.set(cc.x+nx.x*.55,cc.y+nx.y*.55,.35);
+ var fk=P.mu*P.m*g*c,fo=on&&r.u<1&&r.s>.01;setA(aK,cc.clone(),new THREE.Vector3(-c,-s,0),fk,vec&&fo);lK.visible=aK.visible;lK.position.set(cc.x-c*.5,cc.y-s*.5,.35);
+ if(on&&play&&r.u<1)for(var i=0;i<2;i++){pi=(pi+1)%NP;pp[pi*3]=bx-.2*c;pp[pi*3+1]=by+.02;pp[pi*3+2]=(Math.random()-.5)*.3;pv[pi*3]=(Math.random()-.5)*.6;pv[pi*3+1]=Math.random()*.9;pv[pi*3+2]=(Math.random()-.5)*.6;pl[pi]=1}
+ for(var j=0;j<NP;j++)if(pl[j]>0){pl[j]-=dt*1.6;pp[j*3]+=pv[j*3]*dt;pp[j*3+1]+=pv[j*3+1]*dt;pp[j*3+2]+=pv[j*3+2]*dt;pv[j*3+1]-=2*dt;if(pl[j]<=0)pp[j*3+1]=-99}pg.attributes.position.needsUpdate=true;
+ if(r.ph!=lastPh){lastPh=r.ph;caps(r.ph)}
+ if(auto)goal(r);
+ if(auto){var k=1-Math.exp(-dt*2.4);['tx','ty','tz','r','th','ph'].forEach(function(a){C[a]+=(G[a]-C[a])*k})}setCam();
+ var v=[r.Ue,r.K,r.Ug,r.Q];v.forEach(function(x,i){$('#b'+i).style.width=Math.min(100,x/M.E*100)+'%';$('#v'+i).textContent=f(x,1)+' J'});
+ $('#bal').textContent='Ue+K+Ug+Q = '+f(v[0]+v[1]+v[2]+v[3],1)+' J';
+ if(!sdrag)$('#sc').value=T/Tt*1000;
+ if(cur==0)chart();
+ R.render(sc,cam)}
+var sdrag=false;$('#sc').addEventListener('pointerdown',function(){sdrag=true});addEventListener('pointerup',function(){sdrag=false});
+build();sample();res();lbls();size();setCam();requestAnimationFrame(frame);
+})();
+</script></body></html>
